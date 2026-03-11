@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+  RESOLVER
+}
+
+enum MarketStatus {
+  ACTIVE
+  CLOSED
+  RESOLVED
+  VOIDED
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  OPEN
+  FILLED
+  PARTIALLY_FILLED
+  CANCELLED
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  ESCROW_LOCK
+  ESCROW_RELEASE
+  PAYOUT
+  REFUND
+}
+
+enum EscrowStatus {
+  LOCKED
+  RELEASED
+  REFUNDED
+}
+
+enum ResolutionStatus {
+  PENDING
+  RESOLVED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  wallet        Wallet?
+  markets       Market[]       @relation("MarketCreator")
+  resolving     Market[]       @relation("MarketResolver")
+  orders        Order[]
+  buyTrades     Trade[]        @relation("TradeBuyer")
+  sellTrades    Trade[]        @relation("TradeSeller")
+  positions     Position[]
+  resolutions   Resolution[]
+  notifications Notification[]
+}
+
+model Wallet {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  balance   Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+  escrows      Escrow[]
+}
+
+model Transaction {
+  id          String          @id @default(uuid()) @db.Uuid
+  walletId    String          @db.Uuid
+  type        TransactionType
+  amount      Decimal         @db.Decimal(12, 2)
+  referenceId String?
+  description String?
+  createdAt   DateTime        @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+}
+
+model Escrow {
+  id        String       @id @default(uuid()) @db.Uuid
+  walletId  String       @db.Uuid
+  orderId   String       @db.Uuid
+  amount    Decimal      @db.Decimal(12, 2)
+  status    EscrowStatus @default(LOCKED)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([status])
+}
+
+model Market {
+  id          String       @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  status      MarketStatus @default(ACTIVE)
+  creatorId   String       @db.Uuid
+  resolverId  String?      @db.Uuid
+  closeDate   DateTime
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  creator    User          @relation("MarketCreator", fields: [creatorId], references: [id])
+  resolver   User?         @relation("MarketResolver", fields: [resolverId], references: [id])
+  options    MarketOption[]
+  orders     Order[]
+  trades     Trade[]
+  positions  Position[]
+  resolution Resolution?
+
+  @@index([status])
+}
+
+model MarketOption {
+  id           String   @id @default(uuid()) @db.Uuid
+  marketId     String   @db.Uuid
+  label        String
+  currentPrice Decimal  @default(0.50) @db.Decimal(5, 2)
+  createdAt    DateTime @default(now())
+
+  market      Market       @relation(fields: [marketId], references: [id])
+  orders      Order[]
+  trades      Trade[]
+  positions   Position[]
+  resolutions Resolution[] @relation("WinningOption")
+
+  @@unique([marketId, label])
+}
+
+model Order {
+  id             String      @id @default(uuid()) @db.Uuid
+  userId         String      @db.Uuid
+  marketId       String      @db.Uuid
+  optionId       String      @db.Uuid
+  type           OrderType
+  side           OrderSide
+  price          Decimal     @db.Decimal(5, 2)
+  quantity       Int
+  filledQuantity Int         @default(0)
+  status         OrderStatus @default(OPEN)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user       User         @relation(fields: [userId], references: [id])
+  market     Market       @relation(fields: [marketId], references: [id])
+  option     MarketOption @relation(fields: [optionId], references: [id])
+  buyTrades  Trade[]      @relation("BuyOrder")
+  sellTrades Trade[]      @relation("SellOrder")
+
+  @@index([marketId, optionId, status, price])
+}
+
+model Trade {
+  id          String   @id @default(uuid()) @db.Uuid
+  marketId    String   @db.Uuid
+  optionId    String   @db.Uuid
+  buyOrderId  String   @db.Uuid
+  sellOrderId String   @db.Uuid
+  buyerId     String   @db.Uuid
+  sellerId    String   @db.Uuid
+  price       Decimal  @db.Decimal(5, 2)
+  quantity    Int
+  createdAt   DateTime @default(now())
+
+  market    Market       @relation(fields: [marketId], references: [id])
+  option    MarketOption @relation(fields: [optionId], references: [id])
+  buyOrder  Order        @relation("BuyOrder", fields: [buyOrderId], references: [id])
+  sellOrder Order        @relation("SellOrder", fields: [sellOrderId], references: [id])
+  buyer     User         @relation("TradeBuyer", fields: [buyerId], references: [id])
+  seller    User         @relation("TradeSeller", fields: [sellerId], references: [id])
+}
+
+model Position {
+  id       String  @id @default(uuid()) @db.Uuid
+  userId   String  @db.Uuid
+  marketId String  @db.Uuid
+  optionId String  @db.Uuid
+  quantity Int     @default(0)
+  avgPrice Decimal @default(0) @db.Decimal(5, 2)
+
+  user   User         @relation(fields: [userId], references: [id])
+  market Market       @relation(fields: [marketId], references: [id])
+  option MarketOption @relation(fields: [optionId], references: [id])
+
+  @@unique([userId, marketId, optionId])
+}
+
+model Resolution {
+  id              String           @id @default(uuid()) @db.Uuid
+  marketId        String           @unique @db.Uuid
+  resolverId      String           @db.Uuid
+  winningOptionId String?          @db.Uuid
+  status          ResolutionStatus @default(PENDING)
+  evidenceUrl     String?
+  notes           String?
+  resolvedAt      DateTime?
+  createdAt       DateTime         @default(now())
+
+  market        Market        @relation(fields: [marketId], references: [id])
+  resolver      User          @relation(fields: [resolverId], references: [id])
+  winningOption MarketOption? @relation("WinningOption", fields: [winningOptionId], references: [id])
+}
+
+model Notification {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  type        String
+  title       String
+  message     String
+  read        Boolean  @default(false)
+  referenceId String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
+}
