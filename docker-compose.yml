@@ -1,0 +1,143 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - prediction-market
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  market-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: bun run src/services/market/index.ts
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_KEY: ${SERVICE_KEY}
+      NOTIFICATION_SERVICE_URL: http://notification-service:3005
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - prediction-market
+
+  order-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: bun run src/services/order/index.ts
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_KEY: ${SERVICE_KEY}
+      WALLET_SERVICE_URL: http://wallet-service:3003
+      MARKET_SERVICE_URL: http://market-service:3001
+      NOTIFICATION_SERVICE_URL: http://notification-service:3005
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - prediction-market
+
+  wallet-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: bun run src/services/wallet/index.ts
+    ports:
+      - "3003:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_KEY: ${SERVICE_KEY}
+      NOTIFICATION_SERVICE_URL: http://notification-service:3005
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - prediction-market
+
+  resolution-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: bun run src/services/resolution/index.ts
+    ports:
+      - "3004:3004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_KEY: ${SERVICE_KEY}
+      WALLET_SERVICE_URL: http://wallet-service:3003
+      MARKET_SERVICE_URL: http://market-service:3001
+      NOTIFICATION_SERVICE_URL: http://notification-service:3005
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - prediction-market
+
+  notification-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: bun run src/services/notification/index.ts
+    ports:
+      - "3005:3005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PORT: 3005
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_KEY: ${SERVICE_KEY}
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - prediction-market
+
+volumes:
+  pgdata:
+
+networks:
+  prediction-market:
+    driver: bridge

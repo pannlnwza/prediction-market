@@ -1,0 +1,39 @@
+{
+  "name": "@prediction-market/backend",
+  "version": "1.0.0",
+  "description": "Prediction market platform backend services",
+  "scripts": {
+    "dev:market": "bun run src/services/market/index.ts",
+    "dev:order": "bun run src/services/order/index.ts",
+    "dev:wallet": "bun run src/services/wallet/index.ts",
+    "dev:resolution": "bun run src/services/resolution/index.ts",
+    "dev:notification": "bun run src/services/notification/index.ts",
+    "dev": "concurrently \"bun:dev:market\" \"bun:dev:order\" \"bun:dev:wallet\" \"bun:dev:resolution\" \"bun:dev:notification\"",
+    "build": "tsc",
+    "db:generate": "bunx prisma generate",
+    "db:migrate": "bunx prisma migrate dev",
+    "db:push": "bunx prisma db push",
+    "db:seed": "bun run prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "bcryptjs": "^2.4.3",
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.8.1"
+  },
+  "prisma": {
+    "seed": "bun run prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.13.9",
+    "prisma": "^6.4.1",
+    "typescript": "^5.7.3"
+  }
+}
