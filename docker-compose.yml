@@ -17,6 +17,27 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: bun run src/services/auth/index.ts
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - prediction-market
+
   market-service:
     build:
       context: ./backend
