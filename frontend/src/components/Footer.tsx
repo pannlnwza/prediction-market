@@ -1,4 +1,4 @@
-import { TrendingUp } from 'lucide-react';
+import { Percent } from 'lucide-react';
 
 const footerColumns = [
   {
@@ -21,7 +21,7 @@ const footerColumns = [
     links: ['Learn', 'X (Twitter)', 'Instagram', 'Discord', 'TikTok', 'News', 'Contact us'],
   },
   {
-    title: 'PredictX',
+    title: 'Odds',
     links: ['Rewards', 'APIs', 'Leaderboard', 'Accuracy', 'Brand', 'Activity', 'Careers', 'Press'],
   },
 ];
@@ -32,10 +32,7 @@ export default function Footer() {
       <div className="max-w-[1400px] mx-auto px-6 py-10">
         {/* Logo */}
         <div className="flex items-center gap-2 mb-1">
-          <div className="w-7 h-7 rounded-lg bg-gray-900 flex items-center justify-center">
-            <TrendingUp size={16} color="#fff" strokeWidth={2.5} />
-          </div>
-          <span className="text-xl font-extrabold tracking-tight text-gray-900">PredictX</span>
+          <span className="text-xl font-extrabold tracking-tight text-gray-900">Odds</span>
         </div>
         <p className="text-[13px] text-gray-500 mb-8">The World's Largest Prediction Market&trade;</p>
 
