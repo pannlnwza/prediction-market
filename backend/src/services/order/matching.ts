@@ -191,7 +191,9 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
 
     remainingQty -= tradeQty;
 
-    // Notify both traders (best effort)
+    // Broadcast price update + trade event to market viewers, notify both traders (best effort)
+    broadcastPriceUpdate(order.marketId, order.optionId, tradePrice);
+    broadcastTradeEvent(order.marketId, tradePrice, tradeQty);
     notifyTrade(buyOrder.userId, sellOrder.userId, order.marketId, tradePrice, tradeQty);
   }
 
@@ -208,6 +210,31 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
   }
 
   return { filled: remainingQty <= 0, trades };
+}
+
+async function broadcastPriceUpdate(marketId: string, optionId: string, tradePrice: number) {
+  try {
+    await notificationClient.post('/api/notifications/broadcast/price', {
+      marketId,
+      options: [
+        { id: optionId, currentPrice: tradePrice },
+        { complementary: true, currentPrice: 1 - tradePrice },
+      ],
+    });
+  } catch {
+    // Best effort
+  }
+}
+
+async function broadcastTradeEvent(marketId: string, price: number, quantity: number) {
+  try {
+    await notificationClient.post('/api/notifications/broadcast/trade', {
+      marketId,
+      trade: { price, quantity, timestamp: new Date().toISOString() },
+    });
+  } catch {
+    // Best effort
+  }
 }
 
 async function notifyTrade(
