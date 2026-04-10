@@ -64,7 +64,7 @@ export default function AuthModal({ mode, onClose, onSwitch }: AuthModalProps) {
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 required
-                className="h-11 px-4 rounded-lg border border-gray-200 bg-gray-50 text-sm outline-none focus:border-teal-500 focus:bg-white"
+                className="h-11 px-4 rounded-lg border border-gray-200 bg-gray-50 text-sm outline-none focus:bg-white"
               />
             )}
             <input
@@ -73,7 +73,7 @@ export default function AuthModal({ mode, onClose, onSwitch }: AuthModalProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="h-11 px-4 rounded-lg border border-gray-200 bg-gray-50 text-sm outline-none focus:border-teal-500 focus:bg-white"
+              className="h-11 px-4 rounded-lg border border-gray-200 bg-gray-50 text-sm outline-none focus:bg-white"
             />
             <input
               type="password"
@@ -82,7 +82,7 @@ export default function AuthModal({ mode, onClose, onSwitch }: AuthModalProps) {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="h-11 px-4 rounded-lg border border-gray-200 bg-gray-50 text-sm outline-none focus:border-teal-500 focus:bg-white"
+              className="h-11 px-4 rounded-lg border border-gray-200 bg-gray-50 text-sm outline-none focus:bg-white"
             />
 
             {error && (
