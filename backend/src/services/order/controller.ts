@@ -26,8 +26,8 @@ export async function placeOrder(req: Request, res: Response, next: NextFunction
     if (!market) {
       throw new AppError(404, 'Market not found', 'NOT_FOUND');
     }
-    if (market.status !== 'ACTIVE') {
-      throw new AppError(400, 'Market is not active', 'MARKET_NOT_ACTIVE');
+    if (market.status !== 'ACTIVE' || new Date(market.closeDate) < new Date()) {
+      throw new AppError(400, 'Market is not active or has passed its close date', 'MARKET_NOT_ACTIVE');
     }
 
     const option = await prisma.marketOption.findUnique({ where: { id: optionId } });

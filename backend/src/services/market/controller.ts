@@ -12,7 +12,12 @@ export async function listMarkets(req: Request, res: Response, next: NextFunctio
     const search = req.query.search as string | undefined;
 
     const where: Record<string, unknown> = {};
-    if (status) where.status = status;
+    if (status) {
+      where.status = status;
+      if (status === 'ACTIVE') {
+        where.closeDate = { gt: new Date() };
+      }
+    }
     if (search) where.title = { contains: search, mode: 'insensitive' };
 
     const markets = await prisma.market.findMany({
