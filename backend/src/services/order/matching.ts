@@ -7,7 +7,7 @@ const notificationClient = createServiceClient(process.env.NOTIFICATION_SERVICE_
 
 interface MatchResult {
   filled: boolean;
-  trades: { buyOrderId: string; sellOrderId: string; price: number; quantity: number }[];
+  trades: { yesOrderId: string; noOrderId: string; price: number; quantity: number }[];
 }
 
 /**
@@ -109,15 +109,14 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
 
     // Execute the trade
     await prisma.$transaction(async (tx) => {
-      // Create trade record (buyOrder = YES buyer, sellOrder = NO buyer for compatibility)
       await tx.trade.create({
         data: {
           marketId: order.marketId,
           optionId: yesOptionId,
-          buyOrderId: yesOrderId,
-          sellOrderId: noOrderId,
-          buyerId: yesUserId,
-          sellerId: noUserId,
+          yesOrderId,
+          noOrderId,
+          yesUserId,
+          noUserId,
           price: tradePrice,
           quantity: tradeQty,
         },
@@ -193,8 +192,8 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
     });
 
     trades.push({
-      buyOrderId: yesOrderId,
-      sellOrderId: noOrderId,
+      yesOrderId,
+      noOrderId,
       price: tradePrice,
       quantity: tradeQty,
     });
@@ -205,18 +204,6 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
     broadcastPriceUpdate(order.marketId, yesOptionId, tradePrice);
     broadcastTradeEvent(order.marketId, tradePrice, tradeQty);
     notifyTrade(yesUserId, noUserId, order.marketId, tradePrice, tradeQty);
-  }
-
-  // Market orders: cancel unfilled remainder
-  if (order.type === 'MARKET' && remainingQty > 0) {
-    const totalFilled = order.quantity - remainingQty;
-    await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        filledQuantity: totalFilled,
-        status: totalFilled > 0 ? 'PARTIALLY_FILLED' : 'CANCELLED',
-      },
-    });
   }
 
   return { filled: remainingQty <= 0, trades };

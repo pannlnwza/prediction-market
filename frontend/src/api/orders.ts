@@ -3,7 +3,6 @@ import api from './client';
 export interface PlaceOrderParams {
   marketId: string;
   optionId: string;
-  type: 'MARKET' | 'LIMIT';
   price: number;
   quantity: number;
 }

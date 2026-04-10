@@ -22,10 +22,6 @@ enum MarketStatus {
   VOIDED
 }
 
-enum OrderType {
-  MARKET
-  LIMIT
-}
 
 
 enum OrderStatus {
@@ -70,8 +66,8 @@ model User {
   markets       Market[]       @relation("MarketCreator")
   resolving     Market[]       @relation("MarketResolver")
   orders        Order[]
-  buyTrades     Trade[]        @relation("TradeBuyer")
-  sellTrades    Trade[]        @relation("TradeSeller")
+  yesTrades     Trade[]        @relation("TradeYesUser")
+  noTrades      Trade[]        @relation("TradeNoUser")
   positions     Position[]
   resolutions   Resolution[]
   notifications Notification[]
@@ -159,7 +155,6 @@ model Order {
   userId         String      @db.Uuid
   marketId       String      @db.Uuid
   optionId       String      @db.Uuid
-  type           OrderType
   price          Decimal     @db.Decimal(5, 2)
   quantity       Int
   filledQuantity Int         @default(0)
@@ -170,8 +165,8 @@ model Order {
   user       User         @relation(fields: [userId], references: [id])
   market     Market       @relation(fields: [marketId], references: [id])
   option     MarketOption @relation(fields: [optionId], references: [id])
-  buyTrades  Trade[]      @relation("BuyOrder")
-  sellTrades Trade[]      @relation("SellOrder")
+  yesOrderTrades Trade[]  @relation("YesOrder")
+  noOrderTrades  Trade[]  @relation("NoOrder")
 
   @@index([marketId, optionId, status, price])
 }
@@ -180,20 +175,20 @@ model Trade {
   id          String   @id @default(uuid()) @db.Uuid
   marketId    String   @db.Uuid
   optionId    String   @db.Uuid
-  buyOrderId  String   @db.Uuid
-  sellOrderId String   @db.Uuid
-  buyerId     String   @db.Uuid
-  sellerId    String   @db.Uuid
+  yesOrderId  String   @db.Uuid
+  noOrderId   String   @db.Uuid
+  yesUserId   String   @db.Uuid
+  noUserId    String   @db.Uuid
   price       Decimal  @db.Decimal(5, 2)
   quantity    Int
   createdAt   DateTime @default(now())
 
   market    Market       @relation(fields: [marketId], references: [id])
   option    MarketOption @relation(fields: [optionId], references: [id])
-  buyOrder  Order        @relation("BuyOrder", fields: [buyOrderId], references: [id])
-  sellOrder Order        @relation("SellOrder", fields: [sellOrderId], references: [id])
-  buyer     User         @relation("TradeBuyer", fields: [buyerId], references: [id])
-  seller    User         @relation("TradeSeller", fields: [sellerId], references: [id])
+  yesOrder  Order        @relation("YesOrder", fields: [yesOrderId], references: [id])
+  noOrder   Order        @relation("NoOrder", fields: [noOrderId], references: [id])
+  yesUser   User         @relation("TradeYesUser", fields: [yesUserId], references: [id])
+  noUser    User         @relation("TradeNoUser", fields: [noUserId], references: [id])
 }
 
 model Position {

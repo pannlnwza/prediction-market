@@ -8,10 +8,10 @@ const walletClient = createServiceClient(process.env.WALLET_SERVICE_URL || 'http
 
 export async function placeOrder(req: Request, res: Response, next: NextFunction) {
   try {
-    const { marketId, optionId, type, price, quantity } = req.body;
+    const { marketId, optionId, price, quantity } = req.body;
 
-    if (!marketId || !optionId || !type || price === undefined || !quantity) {
-      throw new AppError(400, 'marketId, optionId, type, price, and quantity are required', 'VALIDATION_ERROR');
+    if (!marketId || !optionId || price === undefined || !quantity) {
+      throw new AppError(400, 'marketId, optionId, price, and quantity are required', 'VALIDATION_ERROR');
     }
 
     if (price < 0.01 || price > 0.99) {
@@ -40,7 +40,6 @@ export async function placeOrder(req: Request, res: Response, next: NextFunction
         userId: req.user!.id,
         marketId,
         optionId,
-        type,
         price,
         quantity,
       },
