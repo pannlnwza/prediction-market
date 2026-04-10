@@ -10,19 +10,37 @@ export interface Market {
   id: string;
   title: string;
   description: string | null;
+  category: string;
   status: string;
   closeDate: string;
   createdAt: string;
   creatorId: string;
   resolverId: string | null;
   options: MarketOption[];
+  volume?: number;
 }
 
-export async function getMarkets(status?: string, search?: string): Promise<Market[]> {
-  const params: Record<string, string> = {};
-  if (status) params.status = status;
-  if (search) params.search = search;
-  const { data } = await api.get<Market[]>('/markets', { params });
+export interface MarketsResponse {
+  markets: Market[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function getMarkets(params?: {
+  status?: string;
+  search?: string;
+  category?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<MarketsResponse> {
+  const query: Record<string, string | number> = {};
+  if (params?.status) query.status = params.status;
+  if (params?.search) query.search = params.search;
+  if (params?.category) query.category = params.category;
+  if (params?.limit) query.limit = params.limit;
+  if (params?.offset) query.offset = params.offset;
+  const { data } = await api.get<MarketsResponse>('/markets', { params: query });
   return data;
 }
 
@@ -34,6 +52,7 @@ export async function getMarket(id: string): Promise<Market> {
 export interface CreateMarketParams {
   title: string;
   description: string;
+  category: string;
   closeDate: string;
   resolverId: string;
 }
