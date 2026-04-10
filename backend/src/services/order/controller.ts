@@ -8,10 +8,10 @@ const walletClient = createServiceClient(process.env.WALLET_SERVICE_URL || 'http
 
 export async function placeOrder(req: Request, res: Response, next: NextFunction) {
   try {
-    const { marketId, optionId, type, side, price, quantity } = req.body;
+    const { marketId, optionId, type, price, quantity } = req.body;
 
-    if (!marketId || !optionId || !type || !side || price === undefined || !quantity) {
-      throw new AppError(400, 'marketId, optionId, type, side, price, and quantity are required', 'VALIDATION_ERROR');
+    if (!marketId || !optionId || !type || price === undefined || !quantity) {
+      throw new AppError(400, 'marketId, optionId, type, price, and quantity are required', 'VALIDATION_ERROR');
     }
 
     if (price < 0.01 || price > 0.99) {
@@ -41,7 +41,6 @@ export async function placeOrder(req: Request, res: Response, next: NextFunction
         marketId,
         optionId,
         type,
-        side,
         price,
         quantity,
       },
@@ -168,14 +167,15 @@ export async function getOrderBook(req: Request, res: Response, next: NextFuncti
     }
 
     const openOrders = await prisma.order.findMany({
-      where: { marketId, status: 'OPEN' },
-      select: { optionId: true, side: true, price: true, quantity: true, filledQuantity: true },
+      where: { marketId, status: { in: ['OPEN', 'PARTIALLY_FILLED'] } },
+      select: { optionId: true, price: true, quantity: true, filledQuantity: true },
     });
 
-    const orderBook: Record<string, { buy: Record<string, number>; sell: Record<string, number> }> = {};
+    // Group by option, price level. total quantity
+    const orderBook: Record<string, Record<string, number>> = {};
 
     for (const option of market.options) {
-      orderBook[option.id] = { buy: {}, sell: {} };
+      orderBook[option.id] = {};
     }
 
     for (const order of openOrders) {
@@ -183,9 +183,8 @@ export async function getOrderBook(req: Request, res: Response, next: NextFuncti
       if (remaining <= 0) continue;
 
       const priceKey = order.price.toString();
-      const sideBook = orderBook[order.optionId]?.[order.side === 'BUY' ? 'buy' : 'sell'];
-      if (sideBook) {
-        sideBook[priceKey] = (sideBook[priceKey] || 0) + remaining;
+      if (orderBook[order.optionId]) {
+        orderBook[order.optionId][priceKey] = (orderBook[order.optionId][priceKey] || 0) + remaining;
       }
     }
 

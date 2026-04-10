@@ -10,6 +10,13 @@ interface MatchResult {
   trades: { buyOrderId: string; sellOrderId: string; price: number; quantity: number }[];
 }
 
+/**
+ * Matching for binary markets:
+ * - Users only BUY YES or BUY NO
+ * - BUY YES at 0.60 matches with BUY NO at 0.40 (prices sum to 1.00)
+ * - The YES buyer pays their price, the NO buyer pays their price
+ * - On resolution: winner gets 1.00 per share, loser gets 0.00
+ */
 export async function matchOrder(orderId: string): Promise<MatchResult> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -22,27 +29,28 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
 
   const trades: MatchResult['trades'] = [];
 
-  // Find matching orders on the opposite side of the SAME option
-  // BUY at $0.62 matches with SELL at <= $0.62
-  // SELL at $0.38 matches with BUY at >= $0.38
-  const oppositeSide = order.side === 'BUY' ? 'SELL' : 'BUY';
-  const priceCondition = order.side === 'BUY'
-    ? { lte: order.price }  // buyer wants cheapest sells
-    : { gte: order.price }; // seller wants highest buys
-  const priceOrder = order.side === 'BUY' ? 'asc' as const : 'desc' as const;
+  // Find the complementary option (YES ↔ NO)
+  const complementaryOption = order.market.options.find((o) => o.id !== order.optionId);
+  if (!complementaryOption) {
+    return { filled: false, trades: [] };
+  }
 
+  // if I buy YES at 0.60, I need someone buying NO at 0.40
+  const complementaryPrice = new Decimal(1).minus(order.price);
+
+  // Find matching orders: people who bought the OTHER option at a price
+  // where their price >= complementaryPrice (they're willing to pay at least what we need)
   const matchingOrders = await prisma.order.findMany({
     where: {
       marketId: order.marketId,
-      optionId: order.optionId,
-      side: oppositeSide,
+      optionId: complementaryOption.id,
       status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
-      price: priceCondition,
-      userId: { not: order.userId }, // can't trade with yourself
+      price: { gte: complementaryPrice },
+      userId: { not: order.userId },
     },
     orderBy: [
-      { price: priceOrder },   // best price first
-      { createdAt: 'asc' },    // oldest first (time priority)
+      { price: 'desc' },     // highest price first (best match)
+      { createdAt: 'asc' },  // oldest first (time priority)
     ],
   });
 
@@ -55,23 +63,21 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
     if (counterRemaining <= 0) continue;
 
     const tradeQty = Math.min(remainingQty, counterRemaining);
-    // Trade price = the resting order's price (the one already in the book)
-    const tradePrice = Number(counterOrder.price);
 
-    const buyOrder = order.side === 'BUY' ? order : counterOrder;
-    const sellOrder = order.side === 'SELL' ? order : counterOrder;
-    const buyerCost = tradePrice * tradeQty;
-    const sellerCost = (1 - tradePrice) * tradeQty;
+    // Each side pays their own price
+    const myPrice = Number(order.price);
+    const theirPrice = Number(counterOrder.price);
+    const myCost = myPrice * tradeQty;
+    const theirCost = theirPrice * tradeQty;
 
-    // Lock escrow for the incoming order (buyer or seller)
+    // Lock escrow for the incoming order
     try {
       await walletClient.post('/api/wallet/escrow/lock', {
         userId: order.userId,
         orderId: order.id,
-        amount: order.side === 'BUY' ? buyerCost : sellerCost,
+        amount: myCost,
       });
     } catch {
-      // Can't lock escrow — stop matching
       break;
     }
 
@@ -80,25 +86,38 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
       await walletClient.post('/api/wallet/escrow/lock', {
         userId: counterOrder.userId,
         orderId: counterOrder.id,
-        amount: order.side === 'BUY' ? sellerCost : buyerCost,
+        amount: theirCost,
       });
     } catch {
-      // Refund the first lock — can't complete this match
-      // For simplicity, skip this counter order and try next
       continue;
     }
 
-    // Execute the trade in a transaction
+    // The trade price is the YES price (used for price display)
+    // If I bought YES, my price is the trade price
+    // If I bought NO, the trade price is 1 - my price
+    const yesOption = order.market.options.find((o) => o.label === 'YES');
+    const isMyOrderYes = order.optionId === yesOption?.id;
+    const tradePrice = isMyOrderYes ? myPrice : theirPrice;
+
+    // Determine which order is YES and which is NO
+    const yesOrderId = isMyOrderYes ? order.id : counterOrder.id;
+    const noOrderId = isMyOrderYes ? counterOrder.id : order.id;
+    const yesUserId = isMyOrderYes ? order.userId : counterOrder.userId;
+    const noUserId = isMyOrderYes ? counterOrder.userId : order.userId;
+    const yesOptionId = isMyOrderYes ? order.optionId : counterOrder.optionId;
+    const noOptionId = isMyOrderYes ? counterOrder.optionId : order.optionId;
+
+    // Execute the trade
     await prisma.$transaction(async (tx) => {
-      // Create trade record
+      // Create trade record (buyOrder = YES buyer, sellOrder = NO buyer for compatibility)
       await tx.trade.create({
         data: {
           marketId: order.marketId,
-          optionId: order.optionId,
-          buyOrderId: buyOrder.id,
-          sellOrderId: sellOrder.id,
-          buyerId: buyOrder.userId,
-          sellerId: sellOrder.userId,
+          optionId: yesOptionId,
+          buyOrderId: yesOrderId,
+          sellOrderId: noOrderId,
+          buyerId: yesUserId,
+          sellerId: noUserId,
           price: tradePrice,
           quantity: tradeQty,
         },
@@ -124,80 +143,71 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
         },
       });
 
-      // Update positions — buyer gets shares
+      // YES buyer gets YES shares
       await tx.position.upsert({
         where: {
           userId_marketId_optionId: {
-            userId: buyOrder.userId,
+            userId: yesUserId,
             marketId: order.marketId,
-            optionId: order.optionId,
+            optionId: yesOptionId,
           },
         },
         create: {
-          userId: buyOrder.userId,
+          userId: yesUserId,
           marketId: order.marketId,
-          optionId: order.optionId,
+          optionId: yesOptionId,
           quantity: tradeQty,
           avgPrice: tradePrice,
         },
-        update: {
-          quantity: { increment: tradeQty },
-        },
+        update: { quantity: { increment: tradeQty } },
       });
 
-      // Update positions — seller loses shares (or goes negative = short)
+      // NO buyer gets NO shares
       await tx.position.upsert({
         where: {
           userId_marketId_optionId: {
-            userId: sellOrder.userId,
+            userId: noUserId,
             marketId: order.marketId,
-            optionId: order.optionId,
+            optionId: noOptionId,
           },
         },
         create: {
-          userId: sellOrder.userId,
+          userId: noUserId,
           marketId: order.marketId,
-          optionId: order.optionId,
-          quantity: -tradeQty,
-          avgPrice: tradePrice,
+          optionId: noOptionId,
+          quantity: tradeQty,
+          avgPrice: 1 - tradePrice,
         },
-        update: {
-          quantity: { decrement: tradeQty },
-        },
+        update: { quantity: { increment: tradeQty } },
       });
 
-      // Update market option price to last trade price
+      // YES price = last trade price, NO = 1 - YES
       await tx.marketOption.update({
-        where: { id: order.optionId },
+        where: { id: yesOptionId },
         data: { currentPrice: tradePrice },
       });
-
-      // Update the complementary option (YES + NO = 1.00)
-      const otherOption = order.market.options.find((o) => o.id !== order.optionId);
-      if (otherOption) {
-        await tx.marketOption.update({
-          where: { id: otherOption.id },
-          data: { currentPrice: new Decimal(1).minus(tradePrice) },
-        });
-      }
+      await tx.marketOption.update({
+        where: { id: noOptionId },
+        data: { currentPrice: new Decimal(1).minus(tradePrice) },
+      });
     });
 
     trades.push({
-      buyOrderId: buyOrder.id,
-      sellOrderId: sellOrder.id,
+      buyOrderId: yesOrderId,
+      sellOrderId: noOrderId,
       price: tradePrice,
       quantity: tradeQty,
     });
 
     remainingQty -= tradeQty;
 
-    // Broadcast price update + trade event to market viewers, notify both traders (best effort)
-    broadcastPriceUpdate(order.marketId, order.optionId, tradePrice);
+    // Broadcast and notify (best effort)
+    broadcastPriceUpdate(order.marketId, yesOptionId, tradePrice);
     broadcastTradeEvent(order.marketId, tradePrice, tradeQty);
-    notifyTrade(buyOrder.userId, sellOrder.userId, order.marketId, tradePrice, tradeQty);
+    notifyTrade(yesUserId, noUserId, order.marketId, tradePrice, tradeQty);
   }
 
-  // If market order and not fully filled, cancel the remainder
+  // Market orders: cancel unfilled remainder
   if (order.type === 'MARKET' && remainingQty > 0) {
     const totalFilled = order.quantity - remainingQty;
     await prisma.order.update({
@@ -221,9 +231,7 @@ async function broadcastPriceUpdate(marketId: string, optionId: string, tradePri
         { complementary: true, currentPrice: 1 - tradePrice },
       ],
     });
-  } catch {
-    // Best effort
-  }
+  } catch {}
 }
 
 async function broadcastTradeEvent(marketId: string, price: number, quantity: number) {
@@ -232,14 +240,12 @@ async function broadcastTradeEvent(marketId: string, price: number, quantity: nu
       marketId,
       trade: { price, quantity, timestamp: new Date().toISOString() },
     });
-  } catch {
-    // Best effort
-  }
+  } catch {}
 }
 
 async function notifyTrade(
-  buyerId: string,
-  sellerId: string,
+  yesUserId: string,
+  noUserId: string,
   marketId: string,
   price: number,
   quantity: number,
@@ -248,21 +254,19 @@ async function notifyTrade(
   try {
     await Promise.all([
       notificationClient.post('/api/notifications', {
-        userId: buyerId,
+        userId: yesUserId,
         type: 'TRADE_MATCHED',
-        title: 'Trade Matched',
+        title: 'Trade Matched — You bought YES',
         message,
         referenceId: marketId,
       }),
       notificationClient.post('/api/notifications', {
-        userId: sellerId,
+        userId: noUserId,
         type: 'TRADE_MATCHED',
-        title: 'Trade Matched',
+        title: 'Trade Matched — You bought NO',
         message,
         referenceId: marketId,
       }),
     ]);
-  } catch {
-    // Notification failure shouldn't break the trade
-  }
+  } catch {}
 }

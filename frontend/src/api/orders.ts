@@ -4,7 +4,6 @@ export interface PlaceOrderParams {
   marketId: string;
   optionId: string;
   type: 'MARKET' | 'LIMIT';
-  side: 'BUY' | 'SELL';
   price: number;
   quantity: number;
 }

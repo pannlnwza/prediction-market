@@ -27,10 +27,6 @@ enum OrderType {
   LIMIT
 }
 
-enum OrderSide {
-  BUY
-  SELL
-}
 
 enum OrderStatus {
   OPEN
@@ -164,7 +160,6 @@ model Order {
   marketId       String      @db.Uuid
   optionId       String      @db.Uuid
   type           OrderType
-  side           OrderSide
   price          Decimal     @db.Decimal(5, 2)
   quantity       Int
   filledQuantity Int         @default(0)
