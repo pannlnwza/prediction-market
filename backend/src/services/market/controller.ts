@@ -10,6 +10,9 @@ export async function listMarkets(req: Request, res: Response, next: NextFunctio
   try {
     const status = req.query.status as string | undefined;
     const search = req.query.search as string | undefined;
+    const category = req.query.category as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
 
     const where: Record<string, unknown> = {};
     if (status) {
@@ -18,15 +21,30 @@ export async function listMarkets(req: Request, res: Response, next: NextFunctio
         where.closeDate = { gt: new Date() };
       }
     }
+    if (category && category !== 'All') where.category = category;
     if (search) where.title = { contains: search, mode: 'insensitive' };
 
-    const markets = await prisma.market.findMany({
-      where,
-      include: { options: true },
-      orderBy: { createdAt: 'desc' },
+    const [markets, total] = await Promise.all([
+      prisma.market.findMany({
+        where,
+        include: {
+          options: true,
+          trades: { select: { price: true, quantity: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.market.count({ where }),
+    ]);
+
+    const marketsWithVolume = markets.map((m) => {
+      const volume = m.trades.reduce((sum, t) => sum + Number(t.price) * t.quantity, 0);
+      const { trades: _, ...market } = m;
+      return { ...market, volume: Math.round(volume * 100) / 100 };
     });
 
-    res.json(markets);
+    res.json({ markets: marketsWithVolume, total, limit, offset });
   } catch (error) {
     next(error);
   }
@@ -37,14 +55,20 @@ export async function getMarket(req: Request, res: Response, next: NextFunction)
     const marketId = req.params.id as string;
     const market = await prisma.market.findUnique({
       where: { id: marketId },
-      include: { options: true, creator: { select: { id: true, displayName: true } } },
+      include: {
+        options: true,
+        creator: { select: { id: true, displayName: true } },
+        trades: { select: { price: true, quantity: true } },
+      },
     });
 
     if (!market) {
       throw new AppError(404, 'Market not found', 'NOT_FOUND');
     }
 
-    res.json(market);
+    const volume = market.trades.reduce((sum, t) => sum + Number(t.price) * t.quantity, 0);
+    const { trades: _, ...marketData } = market;
+    res.json({ ...marketData, volume: Math.round(volume * 100) / 100 });
   } catch (error) {
     next(error);
   }
@@ -52,7 +76,7 @@ export async function getMarket(req: Request, res: Response, next: NextFunction)
 
 export async function createMarket(req: Request, res: Response, next: NextFunction) {
   try {
-    const { title, description, closeDate, resolverId } = req.body;
+    const { title, description, category, closeDate, resolverId } = req.body;
 
     if (!title || !closeDate) {
       throw new AppError(400, 'Title and closeDate are required', 'VALIDATION_ERROR');
@@ -62,6 +86,7 @@ export async function createMarket(req: Request, res: Response, next: NextFuncti
       data: {
         title,
         description,
+        category: category || 'General',
         closeDate: new Date(closeDate),
         creatorId: req.user!.id,
         resolverId,

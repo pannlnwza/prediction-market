@@ -115,6 +115,7 @@ model Market {
   id          String       @id @default(uuid()) @db.Uuid
   title       String
   description String?
+  category    String       @default("General")
   status      MarketStatus @default(ACTIVE)
   creatorId   String       @db.Uuid
   resolverId  String?      @db.Uuid
