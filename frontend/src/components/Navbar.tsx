@@ -1,28 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, TrendingUp, Percent, Flame, Zap, Menu, Wallet, LogOut, Shield } from 'lucide-react';
+import { Menu, Wallet, LogOut, Shield, BarChart3, Scale } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { getBalance } from '../api/wallet';
 import AuthModal from './AuthModal';
-
-const categories = [
-  { label: 'Trending', icon: 'trending' },
-  { label: 'Breaking', icon: 'flame' },
-  { label: 'New', icon: 'zap' },
-  { label: 'Politics' },
-  { label: 'Sports' },
-  { label: 'Crypto' },
-  { label: 'Iran' },
-  { label: 'Finance' },
-  { label: 'Geopolitics' },
-  { label: 'Tech' },
-  { label: 'Culture' },
-  { label: 'Economy' },
-  { label: 'Climate & Science' },
-  { label: 'Elections' },
-  { label: 'More' },
-];
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -47,22 +29,30 @@ export default function Navbar() {
             <span className="text-lg font-extrabold tracking-tight">Odds</span>
           </Link>
 
-          {/* Search */}
-          <div className="flex-1 max-w-[420px]">
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search markets..."
-                className="w-full h-[38px] pl-9 pr-8 rounded-full border border-gray-200 bg-gray-50 text-sm outline-none text-gray-900"
-              />
-            </div>
-          </div>
+          <div className="flex-1" />
 
           {/* Right */}
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2">
             {user ? (
               <>
+                <Link
+                  to="/portfolio"
+                  className="flex items-center gap-1.5 text-sm font-medium text-gray-600 no-underline hover:text-gray-900 transition-colors px-2 py-1.5"
+                >
+                  <BarChart3 size={14} />
+                  Portfolio
+                </Link>
+
+                {user.role === 'RESOLVER' && (
+                  <Link
+                    to="/resolver"
+                    className="flex items-center gap-1.5 text-sm font-medium text-gray-600 no-underline hover:text-gray-900 transition-colors px-2 py-1.5"
+                  >
+                    <Scale size={14} />
+                    Resolve
+                  </Link>
+                )}
+
                 {user.role === 'ADMIN' && (
                   <Link
                     to="/admin"
@@ -97,10 +87,6 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <div className="flex items-center gap-1.5 text-teal-700 text-sm font-medium cursor-pointer">
-                  <div className="w-2 h-2 rounded-full bg-teal-600" />
-                  How it works
-                </div>
                 <button
                   onClick={() => setAuthModal('login')}
                   className="text-sm font-medium text-gray-700 bg-transparent border-none cursor-pointer px-3 py-1.5"
@@ -121,21 +107,6 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Category tabs */}
-        <div className="max-w-[1400px] mx-auto px-6 flex gap-0.5 overflow-x-auto border-t border-gray-100 scrollbar-hide">
-          {categories.map((cat, i) => (
-            <button
-              key={cat.label}
-              className={`px-3 py-2.5 text-sm font-medium whitespace-nowrap bg-transparent border-none cursor-pointer transition-colors
-                ${i === 0 ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900'}`}
-            >
-              {cat.icon === 'trending' && <TrendingUp size={14} className="inline mr-1 align-[-2px]" />}
-              {cat.icon === 'flame' && <Flame size={14} className="inline mr-1 align-[-2px] text-red-500" />}
-              {cat.icon === 'zap' && <Zap size={14} className="inline mr-1 align-[-2px] text-amber-500" />}
-              {cat.label}
-            </button>
-          ))}
-        </div>
       </header>
 
       {authModal && (
