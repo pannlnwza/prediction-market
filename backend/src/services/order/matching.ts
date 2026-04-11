@@ -219,14 +219,14 @@ async function notifyTrade(
       notificationClient.post('/api/notifications', {
         userId: yesUserId,
         type: 'TRADE_MATCHED',
-        title: 'Trade Matched — You bought YES',
+        title: 'Trade Matched: You bought YES',
         message,
         referenceId: marketId,
       }),
       notificationClient.post('/api/notifications', {
         userId: noUserId,
         type: 'TRADE_MATCHED',
-        title: 'Trade Matched — You bought NO',
+        title: 'Trade Matched: You bought NO',
         message,
         referenceId: marketId,
       }),
