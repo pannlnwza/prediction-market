@@ -25,7 +25,7 @@ export default function Navbar() {
         {/* Top bar */}
         <div className="max-w-[1400px] mx-auto px-6 flex items-center h-14 gap-4">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 no-underline text-gray-900 shrink-0">
+          <Link to="/" className="flex items-center gap-2 no-underline text-gray-900 shrink-0 active:scale-90 transition-transform duration-150">
             <span className="text-lg font-extrabold tracking-tight">Odds</span>
           </Link>
 

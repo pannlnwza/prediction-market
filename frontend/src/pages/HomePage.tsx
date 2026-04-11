@@ -77,7 +77,7 @@ export default function HomePage() {
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }}
                   placeholder="Search..."
-                  className="h-9 w-48 pl-8 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none transition-colors"
+                  className="h-9 w-92 pl-8 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none transition-colors"
                 />
               </div>
             </div>
@@ -116,7 +116,7 @@ export default function HomePage() {
                   <div className="flex justify-center pt-8 pb-4">
                     <button
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                      className="px-8 py-2.5 rounded-full border border-gray-200 bg-white text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                      className="px-8 py-2.5 rounded-full border border-gray-200 bg-white text-sm font-bold text-gray-700 cursor-pointer hover:bg-gray-50 shrink-0 active:scale-98 transition-transform duration-150"
                     >
                       Show more markets
                     </button>
