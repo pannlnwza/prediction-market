@@ -13,6 +13,16 @@ function signToken(user: { id: string; email: string; role: string }): string {
   return jwt.sign({ id: user.id, email: user.email, role: user.role }, secret, { expiresIn: TOKEN_EXPIRY });
 }
 
+function setTokenCookie(res: Response, token: string) {
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    path: '/',
+  });
+}
+
 export async function register(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password, displayName } = req.body;
@@ -39,6 +49,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     });
 
     const token = signToken(user);
+    setTokenCookie(res, token);
     res.status(201).json({ token, user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role } });
   } catch (error) {
     next(error);
@@ -64,10 +75,16 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     }
 
     const token = signToken(user);
+    setTokenCookie(res, token);
     res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role } });
   } catch (error) {
     next(error);
   }
+}
+
+export async function logout(_req: Request, res: Response) {
+  res.cookie('token', '', { httpOnly: true, maxAge: 0, path: '/' });
+  res.json({ success: true });
 }
 
 export async function getMe(req: Request, res: Response, next: NextFunction) {

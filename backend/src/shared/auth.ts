@@ -13,13 +13,14 @@ export function authenticate(
   res: Response,
   next: NextFunction
 ): void {
+  // Try Bearer token first, then HTTP-only cookie
   const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : (req as any).cookies?.token;
+
+  if (!token) {
     res.status(401).json({ error: { code: "UNAUTHORIZED", message: "Missing or invalid token" } });
     return;
   }
-
-  const token = header.slice(7);
 
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
