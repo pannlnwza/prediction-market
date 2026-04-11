@@ -64,33 +64,9 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
 
     const tradeQty = Math.min(remainingQty, counterRemaining);
 
-    // Each side pays their own price
+    // Each side pays their own price (escrow already locked at order placement)
     const myPrice = Number(order.price);
     const theirPrice = Number(counterOrder.price);
-    const myCost = myPrice * tradeQty;
-    const theirCost = theirPrice * tradeQty;
-
-    // Lock escrow for the incoming order
-    try {
-      await walletClient.post('/api/wallet/escrow/lock', {
-        userId: order.userId,
-        orderId: order.id,
-        amount: myCost,
-      });
-    } catch {
-      break;
-    }
-
-    // Lock escrow for the counter order
-    try {
-      await walletClient.post('/api/wallet/escrow/lock', {
-        userId: counterOrder.userId,
-        orderId: counterOrder.id,
-        amount: theirCost,
-      });
-    } catch {
-      continue;
-    }
 
     // The trade price is the YES price (used for price display)
     // If I bought YES, my price is the trade price

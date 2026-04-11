@@ -35,6 +35,18 @@ export async function placeOrder(req: Request, res: Response, next: NextFunction
       throw new AppError(400, 'Invalid option for this market', 'INVALID_OPTION');
     }
 
+    // Lock escrow upfront (Polymarket style — money committed on order placement)
+    const cost = price * quantity;
+    try {
+      await walletClient.post('/api/wallet/escrow/lock', {
+        userId: req.user!.id,
+        orderId: 'pending', // temporary, updated after order creation
+        amount: cost,
+      });
+    } catch {
+      throw new AppError(400, 'Insufficient balance', 'INSUFFICIENT_BALANCE');
+    }
+
     const order = await prisma.order.create({
       data: {
         userId: req.user!.id,
@@ -45,6 +57,19 @@ export async function placeOrder(req: Request, res: Response, next: NextFunction
       },
       include: { option: true },
     });
+
+    // Update the escrow with the real order ID
+    const escrows = await prisma.escrow.findMany({
+      where: { orderId: 'pending', wallet: { userId: req.user!.id } },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    });
+    if (escrows.length > 0) {
+      await prisma.escrow.update({
+        where: { id: escrows[0].id },
+        data: { orderId: order.id },
+      });
+    }
 
     // Run matching engine
     const matchResult = await matchOrder(order.id);
