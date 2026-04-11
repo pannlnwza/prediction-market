@@ -125,6 +125,10 @@ export async function updateMarket(req: Request, res: Response, next: NextFuncti
       throw new AppError(404, 'Market not found', 'NOT_FOUND');
     }
 
+    if (status === 'VOIDED' && (market.status === 'RESOLVED' || market.status === 'VOIDED')) {
+      throw new AppError(400, 'Cannot void a resolved or already voided market', 'INVALID_STATUS');
+    }
+
     const updated = await prisma.market.update({
       where: { id: marketId },
       data: {
