@@ -43,6 +43,17 @@ export async function getOrderBook(marketId: string) {
   return data;
 }
 
+export interface TradeHistory {
+  price: string | number;
+  quantity: number;
+  createdAt: string;
+}
+
+export async function getTradeHistory(marketId: string): Promise<TradeHistory[]> {
+  const { data } = await api.get<TradeHistory[]>(`/markets/${marketId}/trades`);
+  return data;
+}
+
 export interface Position {
   id: string;
   userId: string;
