@@ -2,7 +2,6 @@ import { Decimal } from '@prisma/client/runtime/library';
 import prisma from '../../shared/prisma';
 import { createServiceClient } from '../../shared/service-client';
 
-const walletClient = createServiceClient(process.env.WALLET_SERVICE_URL || 'http://localhost:3003');
 const notificationClient = createServiceClient(process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3005');
 
 interface MatchResult {
