@@ -1,8 +1,12 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOrders, cancelOrder, type Order } from '../../api/orders';
 import { StatusBadge, formatCurrency } from './StatusBadge';
 
+const PAGE_SIZE = 5;
+
 export function YourOrders({ marketId }: { marketId: string }) {
+  const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
   const { data: orders = [] } = useQuery<Order[]>({
     queryKey: ['my-orders', marketId],
@@ -20,9 +24,17 @@ export function YourOrders({ marketId }: { marketId: string }) {
 
   if (orders.length === 0) return null;
 
+  const totalPages = Math.ceil(orders.length / PAGE_SIZE);
+  const paged = orders.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   return (
     <div className="pt-5">
-      <h3 className="text-base font-bold text-gray-900 mb-3">Your Orders</h3>
+      <h3 className="text-base font-bold text-gray-900 mb-3">
+        Your Orders
+        {orders.length > PAGE_SIZE && (
+          <span className="text-xs font-normal text-gray-400 ml-2">({orders.length})</span>
+        )}
+      </h3>
       <div className="overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -35,7 +47,7 @@ export function YourOrders({ marketId }: { marketId: string }) {
             </tr>
           </thead>
           <tbody>
-            {orders.map((order) => (
+            {paged.map((order) => (
               <tr key={order.id} className="border-t border-gray-100">
                 <td className="py-2.5">
                   <span className={`text-sm font-semibold ${order.option?.label === 'YES' ? 'text-green-600' : 'text-red-500'}`}>
@@ -67,6 +79,27 @@ export function YourOrders({ marketId }: { marketId: string }) {
           </tbody>
         </table>
       </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1 pt-2">
+          <button
+            onClick={() => setPage(p => p - 1)}
+            disabled={page === 0}
+            className="px-2 py-1 text-xs text-gray-500 bg-transparent border-none cursor-pointer hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Prev
+          </button>
+          <span className="text-xs text-gray-400">
+            {page + 1} / {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={page === totalPages - 1}
+            className="px-2 py-1 text-xs text-gray-500 bg-transparent border-none cursor-pointer hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }
