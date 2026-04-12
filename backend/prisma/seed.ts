@@ -183,73 +183,182 @@ async function main() {
 
   console.log(`Created ${resolvedMarkets.length} resolutions`);
 
-  // Create some sample orders + trades between users
+  // Generate rich trade history for several markets
   const alice = users[2];
   const bob = users[3];
-  const btcMarket = markets[0]; // BTC $150k market
+  const charlie = users[4];
+  const traders = [alice, bob, charlie];
 
-  // Alice buys YES at $0.42, Bob buys NO at $0.58
-  const aliceOrder = await prisma.order.create({
-    data: { userId: alice.id, marketId: btcMarket.market.id, optionId: btcMarket.yesOption.id, price: 0.42, quantity: 20, filledQuantity: 20, status: "FILLED" },
-  });
+  // Markets to add trade history to (all active markets)
+  const marketsWithHistory = markets.filter(m => m.market.status === MarketStatus.ACTIVE);
 
-  const bobOrder = await prisma.order.create({
-    data: { userId: bob.id, marketId: btcMarket.market.id, optionId: btcMarket.noOption.id, price: 0.58, quantity: 20, filledQuantity: 20, status: "FILLED" },
-  });
+  let tradeCount = 0;
 
-  await prisma.trade.create({
-    data: {
-      marketId: btcMarket.market.id,
-      optionId: btcMarket.yesOption.id,
-      yesOrderId: aliceOrder.id,
-      noOrderId: bobOrder.id,
-      yesUserId: alice.id,
-      noUserId: bob.id,
-      price: 0.42,
-      quantity: 20,
-    },
-  });
+  for (const mkt of marketsWithHistory) {
+    const market = mkt.market;
+    const yesOpt = mkt.yesOption;
+    const noOpt = mkt.noOption;
 
-  // Create positions
-  await prisma.position.upsert({
-    where: { userId_marketId_optionId: { userId: alice.id, marketId: btcMarket.market.id, optionId: btcMarket.yesOption.id } },
-    update: { quantity: 20, avgPrice: 0.42 },
-    create: { userId: alice.id, marketId: btcMarket.market.id, optionId: btcMarket.yesOption.id, quantity: 20, avgPrice: 0.42 },
-  });
+    // Top 5 markets get more trades for richer price charts
+    const marketIndex = marketsWithHistory.indexOf(mkt);
+    const numTrades = marketIndex < 5
+      ? 15 + Math.floor(Math.random() * 11)   // 15-25 trades
+      : 5 + Math.floor(Math.random() * 8);    // 5-12 trades
+    let currentPrice = 0.5;
+    const targetPrice = Number(mkt.yesOption.id ? MARKETS.find(m => m.title === market.title)?.yesPrice ?? 0.5 : 0.5);
 
-  await prisma.position.upsert({
-    where: { userId_marketId_optionId: { userId: bob.id, marketId: btcMarket.market.id, optionId: btcMarket.noOption.id } },
-    update: { quantity: 20, avgPrice: 0.58 },
-    create: { userId: bob.id, marketId: btcMarket.market.id, optionId: btcMarket.noOption.id, quantity: 20, avgPrice: 0.58 },
-  });
+    for (let i = 0; i < numTrades; i++) {
+      // Drift price toward target with volatility
+      const progress = i / numTrades;
+      const target = 0.5 + (targetPrice - 0.5) * progress;
+      // Add realistic volatility: occasional spikes and dips
+      const spike = Math.random() < 0.15 ? (Math.random() - 0.5) * 0.15 : 0;
+      currentPrice += (target - currentPrice) * 0.15 + (Math.random() - 0.5) * 0.06 + spike;
+      currentPrice = Math.max(0.05, Math.min(0.95, currentPrice));
+      const tradePrice = Math.round(currentPrice * 100) / 100;
+      const qty = 5 + Math.floor(Math.random() * 20);
 
-  // Deduct from wallets (escrow)
-  await prisma.wallet.update({ where: { userId: alice.id }, data: { balance: { decrement: 8.40 } } }); // 20 * 0.42
-  await prisma.wallet.update({ where: { userId: bob.id }, data: { balance: { decrement: 11.60 } } }); // 20 * 0.58
+      // Pick two different traders
+      const yesTrader = traders[i % traders.length];
+      const noTrader = traders[(i + 1) % traders.length];
 
-  // Create escrows
-  const aliceWallet = await prisma.wallet.findUnique({ where: { userId: alice.id } });
-  const bobWallet = await prisma.wallet.findUnique({ where: { userId: bob.id } });
+      // Spread trades across 60 days with non-linear distribution (more recent = more trades)
+      const timeFraction = i / numTrades;
+      const daysAgo = Math.floor(60 * Math.pow(1 - timeFraction, 1.5));
+      const hoursOffset = Math.floor(Math.random() * 24);
+      const tradeDate = new Date();
+      tradeDate.setDate(tradeDate.getDate() - daysAgo);
+      tradeDate.setHours(hoursOffset, Math.floor(Math.random() * 60));
 
-  if (aliceWallet) {
-    await prisma.escrow.create({ data: { walletId: aliceWallet.id, orderId: aliceOrder.id, amount: 8.40, status: "LOCKED" } });
-    await prisma.transaction.create({ data: { walletId: aliceWallet.id, type: "ESCROW_LOCK", amount: 8.40, referenceId: aliceOrder.id, description: "Escrow for BTC $150k market" } });
+      // Create orders
+      const yesOrder = await prisma.order.create({
+        data: { userId: yesTrader.id, marketId: market.id, optionId: yesOpt.id, price: tradePrice, quantity: qty, filledQuantity: qty, status: "FILLED", createdAt: tradeDate },
+      });
+      const noOrder = await prisma.order.create({
+        data: { userId: noTrader.id, marketId: market.id, optionId: noOpt.id, price: Math.round((1 - tradePrice) * 100) / 100, quantity: qty, filledQuantity: qty, status: "FILLED", createdAt: tradeDate },
+      });
+
+      // Create trade
+      await prisma.trade.create({
+        data: {
+          marketId: market.id,
+          optionId: yesOpt.id,
+          yesOrderId: yesOrder.id,
+          noOrderId: noOrder.id,
+          yesUserId: yesTrader.id,
+          noUserId: noTrader.id,
+          price: tradePrice,
+          quantity: qty,
+          createdAt: tradeDate,
+        },
+      });
+
+      tradeCount++;
+    }
+
+    // Update final price
+    const finalPrice = Math.round(currentPrice * 100) / 100;
+    await prisma.marketOption.update({ where: { id: yesOpt.id }, data: { currentPrice: finalPrice } });
+    await prisma.marketOption.update({ where: { id: noOpt.id }, data: { currentPrice: Math.round((1 - finalPrice) * 100) / 100 } });
   }
-  if (bobWallet) {
-    await prisma.escrow.create({ data: { walletId: bobWallet.id, orderId: bobOrder.id, amount: 11.60, status: "LOCKED" } });
-    await prisma.transaction.create({ data: { walletId: bobWallet.id, type: "ESCROW_LOCK", amount: 11.60, referenceId: bobOrder.id, description: "Escrow for BTC $150k market" } });
+
+  console.log(`Created ${tradeCount} trades across ${marketsWithHistory.length} markets`);
+
+  // Create positions for traders (on first 10 markets for portfolio variety)
+  const marketsForPositions = marketsWithHistory.slice(0, 10);
+  for (const mkt of marketsForPositions) {
+    // Not every trader has a position in every market
+    const numTraders = 1 + Math.floor(Math.random() * traders.length);
+    for (let t = 0; t < numTraders; t++) {
+      const trader = traders[t];
+      const yesPrice = Number(mkt.yesOption.currentPrice);
+      // Some traders hold YES, some hold NO, some hold both
+      if (Math.random() > 0.3) {
+        const yesQty = Math.floor(Math.random() * 30) + 5;
+        await prisma.position.upsert({
+          where: { userId_marketId_optionId: { userId: trader.id, marketId: mkt.market.id, optionId: mkt.yesOption.id } },
+          update: { quantity: yesQty },
+          create: { userId: trader.id, marketId: mkt.market.id, optionId: mkt.yesOption.id, quantity: yesQty, avgPrice: Math.round((yesPrice - 0.05 + Math.random() * 0.1) * 100) / 100 },
+        });
+      }
+      if (Math.random() > 0.3) {
+        const noQty = Math.floor(Math.random() * 20) + 5;
+        await prisma.position.upsert({
+          where: { userId_marketId_optionId: { userId: trader.id, marketId: mkt.market.id, optionId: mkt.noOption.id } },
+          update: { quantity: noQty },
+          create: { userId: trader.id, marketId: mkt.market.id, optionId: mkt.noOption.id, quantity: noQty, avgPrice: Math.round((1 - yesPrice - 0.05 + Math.random() * 0.1) * 100) / 100 },
+        });
+      }
+    }
   }
 
-  // Create some notifications
+  // Create open orders for order book depth on top 8 active markets
+  const marketsForOrderBook = marketsWithHistory.slice(0, 8);
+  let openOrderCount = 0;
+
+  for (const mkt of marketsForOrderBook) {
+    const currentYesPrice = Number(mkt.yesOption.currentPrice);
+
+    // Generate YES buy orders at various price levels below current price
+    for (let i = 0; i < 5; i++) {
+      const price = Math.round((currentYesPrice - 0.02 * (i + 1)) * 100) / 100;
+      if (price < 0.01) continue;
+      const trader = traders[i % traders.length];
+      const qty = 5 + Math.floor(Math.random() * 25);
+
+      await prisma.order.create({
+        data: {
+          userId: trader.id,
+          marketId: mkt.market.id,
+          optionId: mkt.yesOption.id,
+          price,
+          quantity: qty,
+          filledQuantity: 0,
+          status: "OPEN",
+        },
+      });
+      openOrderCount++;
+    }
+
+    // Generate NO buy orders at various price levels
+    const currentNoPrice = 1 - currentYesPrice;
+    for (let i = 0; i < 5; i++) {
+      const price = Math.round((currentNoPrice - 0.02 * (i + 1)) * 100) / 100;
+      if (price < 0.01) continue;
+      const trader = traders[(i + 1) % traders.length];
+      const qty = 5 + Math.floor(Math.random() * 25);
+
+      await prisma.order.create({
+        data: {
+          userId: trader.id,
+          marketId: mkt.market.id,
+          optionId: mkt.noOption.id,
+          price,
+          quantity: qty,
+          filledQuantity: 0,
+          status: "OPEN",
+        },
+      });
+      openOrderCount++;
+    }
+  }
+
+  console.log(`Created ${openOrderCount} open orders across ${marketsForOrderBook.length} markets`);
+
+  // Create notifications
   await prisma.notification.createMany({
     data: [
-      { userId: alice.id, type: "TRADE_MATCHED", title: "Trade Matched", message: "Your YES order on BTC $150k market was filled: 20 shares at $0.42", referenceId: btcMarket.market.id },
-      { userId: bob.id, type: "TRADE_MATCHED", title: "Trade Matched", message: "Your NO order on BTC $150k market was filled: 20 shares at $0.58", referenceId: btcMarket.market.id },
-      { userId: alice.id, type: "MARKET_CREATED", title: "New Market", message: "New market created: Will GPT-5 be released before July 2026?", referenceId: markets[2].market.id },
+      { userId: alice.id, type: "TRADE_MATCHED", title: "Trade Matched", message: "Your YES order on BTC $150k market was filled", referenceId: marketsWithHistory[0].market.id },
+      { userId: alice.id, type: "TRADE_MATCHED", title: "Trade Matched", message: "Your NO order on Tesla $400 market was filled", referenceId: marketsWithHistory[1].market.id },
+      { userId: bob.id, type: "TRADE_MATCHED", title: "Trade Matched", message: "Your YES order on GPT-5 market was filled", referenceId: marketsWithHistory[2].market.id },
+      { userId: charlie.id, type: "TRADE_MATCHED", title: "Trade Matched", message: "Your NO order on Fed rates market was filled", referenceId: marketsWithHistory[3].market.id },
+      { userId: alice.id, type: "MARKET_CREATED", title: "New Market", message: "New market: Will Apple release a foldable device in 2026?", referenceId: marketsWithHistory[4].market.id },
+      { userId: bob.id, type: "MARKET_CREATED", title: "New Market", message: "New market: Will Bitcoin reach $150k by end of 2026?", referenceId: marketsWithHistory[0].market.id },
+      { userId: alice.id, type: "MARKET_RESOLVED", title: "Market Resolved", message: "Thailand World Cup market resolved: NO wins", referenceId: resolvedMarkets.length > 0 ? resolvedMarkets[0].market.id : marketsWithHistory[0].market.id },
     ],
   });
 
-  console.log("Created sample orders, trades, positions, escrows, and notifications");
+  console.log("Created positions and notifications");
   console.log("Seeding complete.");
 }
 
