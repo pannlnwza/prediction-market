@@ -1,8 +1,9 @@
+import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Calendar, Bookmark, Share2, ArrowLeft } from 'lucide-react';
-import Navbar from '../components/Navbar';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Calendar, Share2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { getMarket } from '../api/markets';
 import { StatusBadge, formatDate } from '../components/market/StatusBadge';
 import { PriceChart } from '../components/market/PriceChart';
@@ -14,6 +15,30 @@ import { MarketInfo } from '../components/market/MarketInfo';
 export default function MarketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const socket = useSocket();
+  const queryClient = useQueryClient();
+
+  // Real-time updates
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    socket.emit('join:market', id);
+
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['market', id] });
+      queryClient.invalidateQueries({ queryKey: ['my-orders', id] });
+      queryClient.invalidateQueries({ queryKey: ['my-position', id] });
+    };
+
+    socket.on('market:price-update', handleUpdate);
+    socket.on('market:trade', handleUpdate);
+
+    return () => {
+      socket.off('market:price-update', handleUpdate);
+      socket.off('market:trade', handleUpdate);
+      socket.emit('leave:market', id);
+    };
+  }, [socket, id, queryClient]);
 
   const { data: market, isLoading, isError } = useQuery({
     queryKey: ['market', id],
@@ -24,7 +49,6 @@ export default function MarketDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar />
         <div className="max-w-[1400px] mx-auto px-6 py-20 text-center">
           <p className="text-sm text-gray-500">Loading market...</p>
         </div>
@@ -35,7 +59,6 @@ export default function MarketDetailPage() {
   if (isError || !market) {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar />
         <div className="max-w-[1400px] mx-auto px-6 py-20 text-center">
           <p className="text-sm text-gray-500">Market not found.</p>
         </div>
@@ -48,8 +71,6 @@ export default function MarketDetailPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
-
       <main className="max-w-[1400px] mx-auto px-6 py-6">
         {/* Back link */}
         <Link to="/" className="inline-flex items-center gap-1 text-sm text-gray-400 no-underline hover:text-gray-600 transition-colors mb-5">
@@ -66,9 +87,6 @@ export default function MarketDetailPage() {
               <div className="flex gap-1.5 shrink-0 ml-4">
                 <button className="p-2 rounded-lg text-gray-400 bg-transparent border-none cursor-pointer hover:text-gray-600 transition-colors">
                   <Share2 size={16} />
-                </button>
-                <button className="p-2 rounded-lg text-gray-400 bg-transparent border-none cursor-pointer hover:text-gray-600 transition-colors">
-                  <Bookmark size={16} />
                 </button>
               </div>
             </div>
@@ -95,7 +113,7 @@ export default function MarketDetailPage() {
             </div>
 
             {/* Chart */}
-            <PriceChart yesPercent={yesPercent} />
+            <PriceChart marketId={market.id} yesPercent={yesPercent} />
 
             {/* Sections */}
             <div className="mt-6 space-y-5">

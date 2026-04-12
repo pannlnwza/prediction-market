@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import Navbar from '../components/Navbar';
 import MarketCard from '../components/MarketCard';
 import { getMarkets, type Market } from '../api/markets';
 
@@ -38,8 +37,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
-
       <main className="max-w-[1400px] mx-auto px-6 py-6">
         <div className="flex gap-8">
           {/* Left sidebar */}
@@ -127,6 +124,13 @@ export default function HomePage() {
           </div>
         </div>
       </main>
+
+      <footer className="py-8 text-center">
+        <div className="flex items-center justify-center gap-2 opacity-30">
+          <img src="/logo.png" alt="Odds" className="h-12" />
+          <span className="text-xs text-gray-500">Prediction Market</span>
+        </div>
+      </footer>
     </div>
   );
 }

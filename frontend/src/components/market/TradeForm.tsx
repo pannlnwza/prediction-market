@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { type MarketOption } from '../../api/markets';
@@ -28,7 +29,9 @@ export function TradeForm({ marketId, options, marketStatus }: TradeFormProps) {
   });
   const walletBalance = walletData ? Math.floor(Number(walletData.balance)) : 0;
 
-  const [activeTab, setActiveTab] = useState<'yes' | 'no'>('yes');
+  const [searchParams] = useSearchParams();
+  const initialSide = searchParams.get('side') === 'no' ? 'no' : 'yes';
+  const [activeTab, setActiveTab] = useState<'yes' | 'no'>(initialSide);
   const [amount, setAmount] = useState(0);
   const [customPrice, setCustomPrice] = useState('');
 

@@ -78,7 +78,7 @@ export function MarketInfo({ description, closeDate, marketId, status }: MarketI
         <div className="text-sm space-y-1.5">
           <div className="flex justify-between py-1 border-b border-gray-100">
             <span className="text-gray-500">Market ID</span>
-            <span className="text-gray-700 text-xs">{marketId.slice(0, 8)}...</span>
+            <span className="text-gray-700">{marketId.slice(0, 8)}...</span>
           </div>
           <div className="flex justify-between py-1 border-b border-gray-100">
             <span className="text-gray-500">Close date</span>

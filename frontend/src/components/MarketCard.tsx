@@ -1,14 +1,15 @@
-import { Link } from 'react-router-dom';
-import type { Market } from '../data/mockMarkets';
+import { Link, useNavigate } from 'react-router-dom';
+import { Flame } from 'lucide-react';
+import type { Market } from '../api/markets';
 
 function formatVolume(vol: number): string {
-  if (vol >= 1_000_000) return `$${(vol / 1_000_000).toFixed(0)}M`;
-  if (vol >= 1_000) return `$${(vol / 1_000).toFixed(0)}K`;
-  if (vol > 0) return `$${vol}`;
-  return '';
+  if (vol >= 1_000_000) return `$${(vol / 1_000_000).toFixed(1)}M`;
+  if (vol >= 1_000) return `$${(vol / 1_000).toFixed(1)}K`;
+  return `$${vol.toFixed(0)}`;
 }
 
 export default function MarketCard({ market }: { market: Market }) {
+  const navigate = useNavigate();
   const yesOpt = market.options.find(o => o.label === 'Yes' || o.label === 'YES');
   const noOpt = market.options.find(o => o.label === 'No' || o.label === 'NO');
   const yesPercent = yesOpt ? Math.round(yesOpt.currentPrice * 100) : null;
@@ -36,10 +37,16 @@ export default function MarketCard({ market }: { market: Market }) {
             </div>
 
             <div className="flex gap-1.5">
-              <button className="flex-1 bg-green-50 text-green-600 py-2 rounded-md text-[13px] font-semibold border-none cursor-pointer hover:bg-green-600 hover:text-white transition-colors">
+              <button
+                onClick={() => navigate(`/market/${market.id}?side=yes`)}
+                className="flex-1 bg-green-50 text-green-600 py-2 rounded-md text-[13px] font-semibold border-none cursor-pointer hover:bg-green-600 hover:text-white transition-colors"
+              >
                 Yes {yesPercent}¢
               </button>
-              <button className="flex-1 bg-red-50 text-red-600 py-2 rounded-md text-[13px] font-semibold border-none cursor-pointer hover:bg-red-600 hover:text-white transition-colors">
+              <button
+                onClick={() => navigate(`/market/${market.id}?side=no`)}
+                className="flex-1 bg-red-50 text-red-600 py-2 rounded-md text-[13px] font-semibold border-none cursor-pointer hover:bg-red-600 hover:text-white transition-colors"
+              >
                 No {noPercent}¢
               </button>
             </div>
@@ -70,7 +77,8 @@ export default function MarketCard({ market }: { market: Market }) {
       {/* Footer */}
       <div className="px-4 py-2 mt-1 flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-500">
-          {formatVolume(market.volume)}{market.volume > 0 ? ' Vol.' : ''}
+          {market.volume > 100 && <Flame size={11} className="text-orange-400 inline mr-0.5" />}
+          {formatVolume(market.volume)} Vol.
         </span>
         <button
           onClick={() => {
