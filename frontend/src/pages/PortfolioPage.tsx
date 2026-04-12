@@ -1,46 +1,38 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
-import { getPortfolio, getOrders, cancelOrder, type Position, type Order } from '../api/orders';
+import { getPortfolio, getOrders } from '../api/orders';
+import { getBalance } from '../api/wallet';
+import { formatCurrency } from '../utils/format';
+import WalletModal from '../components/WalletModal';
+import PositionsTab from '../components/portfolio/PositionsTab';
+import OrdersTab from '../components/portfolio/OrdersTab';
 
-function formatCurrency(val: number) { return `$${val.toFixed(2)}`; }
+type Tab = 'positions' | 'orders';
 
 export default function PortfolioPage() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<Tab>('positions');
+  const [walletOpen, setWalletOpen] = useState(false);
 
-  const { data: positions = [], isLoading: posLoad } = useQuery({
+  const { data: positions = [] } = useQuery({
     queryKey: ['portfolio'],
     queryFn: getPortfolio,
     enabled: !!user,
   });
 
-  const { data: orders = [], isLoading: ordLoad } = useQuery({
+  const { data: orders = [] } = useQuery({
     queryKey: ['orders'],
     queryFn: () => getOrders(),
     enabled: !!user,
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: cancelOrder,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
-      queryClient.invalidateQueries({ queryKey: ['wallet-balance'] });
-    },
+  const { data: walletData } = useQuery({
+    queryKey: ['wallet-balance'],
+    queryFn: getBalance,
+    enabled: !!user,
   });
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-white">
-        <Navbar />
-        <div className="max-w-[1400px] mx-auto px-6 py-20 text-center">
-          <p className="text-sm text-gray-500">Please log in to view your portfolio.</p>
-        </div>
-      </div>
-    );
-  }
+  const cash = walletData ? Number(walletData.balance) : 0;
 
   const totalValue = positions.reduce((s, p) => s + p.quantity * Number(p.option?.currentPrice ?? 0), 0);
   const totalPnl = positions.reduce((s, p) => {
@@ -49,15 +41,13 @@ export default function PortfolioPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
-
       <main className="max-w-[1400px] mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Portfolio</h1>
 
         {/* Summary */}
-        <div className="flex gap-4 mb-8">
+        <div className="flex gap-4 mb-6">
           <div className="flex-1 border border-gray-200 rounded-xl p-5">
-            <p className="text-xs text-gray-500 mb-1">Total Value</p>
+            <p className="text-xs text-gray-500 mb-1">Portfolio Value</p>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalValue)}</p>
           </div>
           <div className="flex-1 border border-gray-200 rounded-xl p-5">
@@ -66,124 +56,46 @@ export default function PortfolioPage() {
               {totalPnl >= 0 ? '+' : ''}{formatCurrency(totalPnl)}
             </p>
           </div>
+          <div className="flex-1 border border-gray-200 rounded-xl p-5">
+            <div className="flex items-start justify-between">
+              <p className="text-xs text-gray-500 mb-1">Balance</p>
+              <button
+                onClick={() => setWalletOpen(true)}
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-teal-600 border-none rounded-xl cursor-pointer hover:bg-teal-700 transition-colors"
+              >
+                Deposit/Withdraw
+              </button>
+            </div>
+            <button
+              onClick={() => setWalletOpen(true)}
+              className="text-2xl font-bold text-gray-900 bg-transparent border-none cursor-pointer p-0 text-left hover:text-teal-700 transition-colors"
+            >
+              {formatCurrency(cash)}
+            </button>
+          </div>
         </div>
 
-        {/* Positions */}
-        <h2 className="text-base font-bold text-gray-900 mb-3">Positions</h2>
-        <div className="border border-gray-200 rounded-xl overflow-hidden mb-8">
-          {posLoad ? (
-            <p className="text-sm text-gray-400 text-center py-10">Loading...</p>
-          ) : positions.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-10">No positions yet</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                  <th className="px-5 py-2.5">Market</th>
-                  <th className="px-5 py-2.5">Option</th>
-                  <th className="px-5 py-2.5 text-right">Shares</th>
-                  <th className="px-5 py-2.5 text-right">Avg Price</th>
-                  <th className="px-5 py-2.5 text-right">Current</th>
-                  <th className="px-5 py-2.5 text-right">Value</th>
-                  <th className="px-5 py-2.5 text-right">P&L</th>
-                </tr>
-              </thead>
-              <tbody>
-                {positions.map((pos) => {
-                  const avg = Number(pos.avgPrice);
-                  const cur = Number(pos.option?.currentPrice ?? 0);
-                  const value = pos.quantity * cur;
-                  const pnl = value - pos.quantity * avg;
-                  return (
-                    <tr key={pos.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-3">
-                        <Link to={`/market/${pos.marketId}`} className="text-gray-900 font-medium no-underline hover:text-teal-700">
-                          {pos.market?.title ?? '—'}
-                        </Link>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className={`text-xs font-semibold ${pos.option?.label === 'YES' ? 'text-green-600' : 'text-red-500'}`}>
-                          {pos.option?.label}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right text-gray-900 font-medium">{pos.quantity}</td>
-                      <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(avg)}</td>
-                      <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(cur)}</td>
-                      <td className="px-5 py-3 text-right text-gray-900 font-medium">{formatCurrency(value)}</td>
-                      <td className={`px-5 py-3 text-right font-semibold ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+        {/* Tabs */}
+        <div className="flex gap-6 border-b border-gray-200 mb-6">
+          {(['positions', 'orders'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`pb-2.5 text-sm font-medium border-b-2 bg-transparent cursor-pointer transition-colors
+                ${tab === t ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              {t === 'orders' ? 'Order History' : 'Positions'}
+            </button>
+          ))}
         </div>
 
-        {/* Orders */}
-        <h2 className="text-base font-bold text-gray-900 mb-3">Order History</h2>
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          {ordLoad ? (
-            <p className="text-sm text-gray-400 text-center py-10">Loading...</p>
-          ) : orders.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-10">No orders yet</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                  <th className="px-5 py-2.5">Market</th>
-                  <th className="px-5 py-2.5">Option</th>
-                  <th className="px-5 py-2.5 text-right">Price</th>
-                  <th className="px-5 py-2.5 text-right">Qty</th>
-                  <th className="px-5 py-2.5 text-right">Filled</th>
-                  <th className="px-5 py-2.5">Status</th>
-                  <th className="px-5 py-2.5 text-right"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3">
-                      <Link to={`/market/${order.marketId}`} className="text-gray-900 font-medium no-underline hover:text-teal-700">
-                        {order.market?.title ?? '—'}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`text-xs font-semibold ${order.option?.label === 'YES' ? 'text-green-600' : 'text-red-500'}`}>
-                        {order.option?.label}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(Number(order.price))}</td>
-                    <td className="px-5 py-3 text-right text-gray-900">{order.quantity}</td>
-                    <td className="px-5 py-3 text-right text-gray-600">{order.filledQuantity}/{order.quantity}</td>
-                    <td className="px-5 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                        order.status === 'FILLED' ? 'bg-green-50 text-green-700' :
-                        order.status === 'OPEN' ? 'bg-blue-50 text-blue-700' :
-                        order.status === 'PARTIALLY_FILLED' ? 'bg-amber-50 text-amber-700' :
-                        'bg-gray-100 text-gray-500'
-                      }`}>
-                        {order.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      {order.status === 'OPEN' && (
-                        <button
-                          onClick={() => cancelMutation.mutate(order.id)}
-                          className="text-xs text-red-500 bg-transparent border-none cursor-pointer hover:text-red-700"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        {tab === 'positions' && <PositionsTab positions={positions} />}
+        {tab === 'orders' && <OrdersTab orders={orders} />}
+
       </main>
+
+      {walletOpen && <WalletModal onClose={() => setWalletOpen(false)} />}
     </div>
   );
 }
+
