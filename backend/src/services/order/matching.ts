@@ -99,7 +99,7 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
       });
 
       // Update incoming order
-      const newFilled = order.filledQuantity + (order.quantity - remainingQty) + tradeQty;
+      const newFilled = order.quantity - remainingQty + tradeQty;
       await tx.order.update({
         where: { id: order.id },
         data: {
