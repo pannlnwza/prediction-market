@@ -157,36 +157,26 @@ The seed creates 36 markets across 6 categories with trade history.
 
 ## Screenshots
 
-### Homepage
-| Desktop |
-|---|
-| <img src="docs/screenshots/homepage.png" height="400" alt="Homepage"> |
+| Homepage | Market Detail |
+|---|---|
+| <img src="docs/screenshots/homepage.png" height="300" alt="Homepage"> | <img src="docs/screenshots/market-detail.png" height="300" alt="Market Detail"> |
 
-### Market Detail
-| Market Detail |
-|---|
-| <img src="docs/screenshots/market-detail.png" height="400" alt="Market Detail"> |
-
-### Portfolio
 | Positions | Order History |
 |---|---|
 | <img src="docs/screenshots/positions.png" height="300" alt="Positions"> | <img src="docs/screenshots/orders.png" height="300" alt="Order History"> |
 
-### Admin Panel
-| Markets Management | User Management |
+| (Admin) Markets | (Admin) Users |
 |---|---|
 | <img src="docs/screenshots/admin-markets.png" height="300" alt="Admin Markets"> | <img src="docs/screenshots/user-management.png" height="300" alt="User Management"> |
 
-| Create Market |
+| (Admin) Create Market | 
 |---|
-| <img src="docs/screenshots/create-market.png" height="300" alt="Create Market"> |
+| <img src="docs/screenshots/create-market.png" height="300" alt="Create Market"> | 
 
-### Wallet & Notifications
-| Wallet Modal | Notifications |
+| Wallet | Notifications |
 |---|---|
 | <img src="docs/screenshots/wallet.png" height="300" alt="Wallet"> | <img src="docs/screenshots/notifications.png" height="300" alt="Notifications"> |
 
-### Authentication
 | Login | Register |
 |---|---|
 | <img src="docs/screenshots/login.png" height="300" alt="Login"> | <img src="docs/screenshots/register.png" height="300" alt="Register"> |
