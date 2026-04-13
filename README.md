@@ -30,7 +30,7 @@ I chose this over a monolith (too coupled, no fault isolation) and microservices
 | Order | 3002 | Place orders, matching engine, price updates, trade history |
 | Wallet | 3003 | Deposits, withdrawals, escrow locking/releasing, payouts |
 | Resolution | 3004 | Verify outcomes, trigger payouts, notify participants |
-| Notification | 3005 | Real-time alerts via WebSocket (Socket.io) |
+| Notification | 3005 | Real-time alerts via REST + WebSocket (Socket.io) |
 
 ### Inter-Service Communication
 
