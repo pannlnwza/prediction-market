@@ -118,6 +118,9 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
       });
 
       // YES buyer gets YES shares
+      const existingYesPos = await tx.position.findUnique({
+        where: { userId_marketId_optionId: { userId: yesUserId, marketId: order.marketId, optionId: yesOptionId } },
+      });
       await tx.position.upsert({
         where: {
           userId_marketId_optionId: {
@@ -133,10 +136,18 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
           quantity: tradeQty,
           avgPrice: tradePrice,
         },
-        update: { quantity: { increment: tradeQty } },
+        update: {
+          quantity: { increment: tradeQty },
+          avgPrice: existingYesPos
+            ? (Number(existingYesPos.avgPrice) * existingYesPos.quantity + tradePrice * tradeQty) / (existingYesPos.quantity + tradeQty)
+            : tradePrice,
+        },
       });
 
       // NO buyer gets NO shares
+      const existingNoPos = await tx.position.findUnique({
+        where: { userId_marketId_optionId: { userId: noUserId, marketId: order.marketId, optionId: noOptionId } },
+      });
       await tx.position.upsert({
         where: {
           userId_marketId_optionId: {
@@ -152,7 +163,12 @@ export async function matchOrder(orderId: string): Promise<MatchResult> {
           quantity: tradeQty,
           avgPrice: 1 - tradePrice,
         },
-        update: { quantity: { increment: tradeQty } },
+        update: {
+          quantity: { increment: tradeQty },
+          avgPrice: existingNoPos
+            ? (Number(existingNoPos.avgPrice) * existingNoPos.quantity + (1 - tradePrice) * tradeQty) / (existingNoPos.quantity + tradeQty)
+            : 1 - tradePrice,
+        },
       });
 
       // YES price = last trade price, NO = 1 - YES
