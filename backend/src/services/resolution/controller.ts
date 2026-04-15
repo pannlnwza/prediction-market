@@ -37,6 +37,9 @@ export async function resolveMarket(req: Request, res: Response, next: NextFunct
       throw new AppError(400, 'Invalid winning option for this market', 'INVALID_OPTION');
     }
 
+    // Pay winners first, if payout fails, market stays unresolved
+    await walletService.post('/api/wallet/payout', { marketId, winningOptionId });
+
     const resolution = await prisma.$transaction(async (tx) => {
       const created = await tx.resolution.create({
         data: {
@@ -57,12 +60,6 @@ export async function resolveMarket(req: Request, res: Response, next: NextFunct
 
       return created;
     });
-
-    try {
-      await walletService.post('/api/wallet/payout', { marketId, winningOptionId });
-    } catch (error) {
-      console.error('Failed to trigger payout:', error);
-    }
 
     try {
       await notificationService.post('/api/notifications', {
