@@ -140,26 +140,22 @@ export async function cancelOrder(req: Request, res: Response, next: NextFunctio
       throw new AppError(400, 'Only open or partially filled orders can be cancelled', 'INVALID_STATUS');
     }
 
+    // Release escrow first — if this fails, order stays open
+    const escrows = await prisma.escrow.findMany({
+      where: { orderId: order.id, status: 'LOCKED' },
+    });
+    for (const escrow of escrows) {
+      await walletClient.post('/api/wallet/escrow/release', {
+        escrowId: escrow.id,
+        winnerUserId: order.userId,
+        amount: order.price * (order.quantity - order.filledQuantity),
+      });
+    }
+
     const cancelled = await prisma.order.update({
       where: { id: order.id },
       data: { status: 'CANCELLED' },
     });
-
-    // Release any locked escrow for this order (best effort)
-    try {
-      const escrows = await prisma.escrow.findMany({
-        where: { orderId: order.id, status: 'LOCKED' },
-      });
-      for (const escrow of escrows) {
-        await walletClient.post('/api/wallet/escrow/release', {
-          escrowId: escrow.id,
-          winnerUserId: order.userId,
-          amount: Number(escrow.amount),
-        });
-      }
-    } catch {
-      // Escrow release failure logged but doesn't block cancellation
-    }
 
     res.json(cancelled);
   } catch (error) {
