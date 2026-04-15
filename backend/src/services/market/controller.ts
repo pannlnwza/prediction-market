@@ -129,6 +129,11 @@ export async function updateMarket(req: Request, res: Response, next: NextFuncti
       throw new AppError(400, 'Cannot void a resolved or already voided market', 'INVALID_STATUS');
     }
 
+    // If voiding, refund escrows first — if refund fails, market stays unchanged
+    if (status === 'VOIDED') {
+      await walletClient.post('/api/wallet/escrow/refund', { marketId });
+    }
+
     const updated = await prisma.market.update({
       where: { id: marketId },
       data: {
@@ -141,9 +146,8 @@ export async function updateMarket(req: Request, res: Response, next: NextFuncti
       include: { options: true },
     });
 
-    // If market is being voided, refund all escrows and notify
+    // Notify about void (best effort — notification is non-critical)
     if (status === 'VOIDED') {
-      walletClient.post('/api/wallet/escrow/refund', { marketId }).catch(() => {});
       notificationClient.post('/api/notifications', {
         userId: market.creatorId,
         type: 'MARKET_VOIDED',
@@ -175,7 +179,16 @@ export async function deleteMarket(req: Request, res: Response, next: NextFuncti
       throw new AppError(400, 'Cannot delete market with existing trades', 'HAS_TRADES');
     }
 
+    // Refund any locked escrows before deleting
+    const openOrders = await prisma.order.findMany({
+      where: { marketId: market.id, status: { in: ['OPEN', 'PARTIALLY_FILLED'] } },
+    });
+    if (openOrders.length > 0) {
+      await walletClient.post('/api/wallet/escrow/refund', { marketId: market.id });
+    }
+
     await prisma.$transaction([
+      prisma.escrow.deleteMany({ where: { order: { marketId: market.id } } }),
       prisma.marketOption.deleteMany({ where: { marketId: market.id } }),
       prisma.order.deleteMany({ where: { marketId: market.id } }),
       prisma.market.delete({ where: { id: market.id } }),
