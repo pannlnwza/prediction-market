@@ -12,7 +12,7 @@ const txOps = {
 const mockTx = {
   trade: { create: txOps.tradeCreate },
   order: { update: txOps.orderUpdate },
-  position: { upsert: txOps.positionUpsert },
+  position: { findUnique: vi.fn().mockResolvedValue(null), upsert: txOps.positionUpsert },
   marketOption: { update: txOps.marketOptionUpdate },
 };
 
